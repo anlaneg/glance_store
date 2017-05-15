@@ -30,3 +30,8 @@ releasenotes/build
 
 #Files created by functional tests
 functional_testing.conf
+
+.project
+.pydevproject
+
+

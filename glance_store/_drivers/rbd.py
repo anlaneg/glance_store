@@ -360,6 +360,7 @@ class Store(driver.Store):
         features = conn.conf_get('rbd_default_features')
         if ((features is None) or (int(features) == 0)):
             features = rbd.RBD_FEATURE_LAYERING
+        #使用ceph的库创建对应rbd
         librbd.create(ioctx, image_name, size, order, old_format=False,
                       features=int(features))
         return StoreLocation({
@@ -492,6 +493,7 @@ class Store(driver.Store):
                                 image.resize(length)
                             LOG.debug(_("writing chunk at offset %s") %
                                       (offset))
+                            #向ceph写入
                             offset += image.write(chunk, offset)
                             checksum.update(chunk)
                             if verifier:

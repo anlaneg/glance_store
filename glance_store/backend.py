@@ -142,7 +142,9 @@ def _list_opts():
     handled_drivers = []  # Used to handle backwards-compatible entries
     for store_entry in drivers:
         driver_cls = _load_store(None, store_entry, False)
+        #driver被载入了，且driver之前没有载入过
         if driver_cls and driver_cls not in handled_drivers:
+            #检查载入的driver有OPTIONS属性，则在driver_opts中合并此options
             if getattr(driver_cls, 'OPTIONS', None) is not None:
                 driver_opts += driver_cls.OPTIONS
             handled_drivers.append(driver_cls)
@@ -150,15 +152,19 @@ def _list_opts():
     # NOTE(zhiyan): This separated approach could list
     # store options before all driver ones, which easier
     # to read and configure by operator.
+    #返回自身的配置 +  各driver的opts
     return ([(_STORE_CFG_GROUP, _STORE_OPTS)] +
             [(_STORE_CFG_GROUP, driver_opts)])
 
 
+#向conf中注册opt
 def register_opts(conf):
+    #拿到glance_store的所有opts
     opts = _list_opts()
     for group, opt_list in opts:
         LOG.debug("Registering options for group %s" % group)
         for opt in opt_list:
+            #逐个注册opt
             conf.register_opt(opt, group=group)
 
 
@@ -226,6 +232,7 @@ class Indexable(object):
         return self.size
 
 
+#载入setup.cfg中的配置glance_store.drivers
 def _load_store(conf, store_entry, invoke_load=True):
     try:
         LOG.debug("Attempting to import store %s", store_entry)
@@ -239,6 +246,7 @@ def _load_store(conf, store_entry, invoke_load=True):
                     "driver will be disabled" % dict(driver=str([driver, e])))
 
 
+#针对setup.cfg配置文件,逐个载入store,并针对每个store进行yield
 def _load_stores(conf):
     for store_entry in set(conf.glance_store.stores):
         try:
@@ -256,6 +264,7 @@ def _load_stores(conf):
             continue
 
 
+#载入setup.cfg中规定的store
 def create_stores(conf=CONF):
     """
     Registers all store modules and all schemes
@@ -265,10 +274,13 @@ def create_stores(conf=CONF):
 
     for (store_entry, store_instance) in _load_stores(conf):
         try:
+            #针对载入的每个store实例，取其支持的schemes
             schemes = store_instance.get_schemes()
+            #配置存储实例
             store_instance.configure(re_raise_bsc=False)
         except NotImplementedError:
             continue
+        
         if not schemes:
             raise exceptions.BackendException('Unable to register store %s. '
                                               'No schemes associated with it.'
@@ -278,6 +290,7 @@ def create_stores(conf=CONF):
                       store_entry, schemes)
 
             scheme_map = {}
+            #载入各实例对应的store_location_class
             loc_cls = store_instance.get_store_location_class()
             for scheme in schemes:
                 scheme_map[scheme] = {
@@ -285,26 +298,29 @@ def create_stores(conf=CONF):
                     'location_class': loc_cls,
                     'store_entry': store_entry
                 }
+            #注册scheme对应的obj
             location.register_scheme_map(scheme_map)
             store_count += 1
 
     return store_count
 
 
+#默认的store,必须已被加载
 def verify_default_store():
     scheme = CONF.glance_store.default_store
     try:
+        #检查是否可被加载
         get_store_from_scheme(scheme)
     except exceptions.UnknownScheme:
         msg = _("Store for scheme %s not found") % scheme
         raise RuntimeError(msg)
 
-
+#返回当前所有已加载的scheme
 def get_known_schemes():
     """Returns list of known schemes."""
     return location.SCHEME_TO_CLS_MAP.keys()
 
-
+#通过schema获得对应的store,如果store是不可重用的，则需要重新载入并重新配置
 def get_store_from_scheme(scheme):
     """
     Given a scheme, return the appropriate store object
@@ -319,8 +335,10 @@ def get_store_from_scheme(scheme):
         # be reused safely and need recreation.
         store_entry = scheme_info['store_entry']
         store = _load_store(store.conf, store_entry, invoke_load=True)
+        #配置store
         store.configure()
         try:
+            #重启注册scheme
             scheme_map = {}
             loc_cls = store.get_store_location_class()
             for scheme in store.get_schemes():
@@ -334,7 +352,7 @@ def get_store_from_scheme(scheme):
             scheme_info['store'] = store
     return store
 
-
+#通过url获得store(url前的协议来识别store)
 def get_store_from_uri(uri):
     """
     Given a URI, return the store object that would handle
@@ -345,7 +363,7 @@ def get_store_from_uri(uri):
     scheme = uri[0:uri.find('/') - 1]
     return get_store_from_scheme(scheme)
 
-
+#调用store的get函数
 def get_from_backend(uri, offset=0, chunk_size=None, context=None):
     """Yields chunks of data from backend specified by uri."""
 
@@ -357,6 +375,7 @@ def get_from_backend(uri, offset=0, chunk_size=None, context=None):
                      context=context)
 
 
+#调用store的get_size函数
 def get_size_from_backend(uri, context=None):
     """Retrieves image size from backend specified by uri."""
 
@@ -372,7 +391,7 @@ def delete_from_backend(uri, context=None):
     store = get_store_from_uri(uri)
     return store.delete(loc, context=context)
 
-
+#获得store的名称
 def get_store_from_location(uri):
     """
     Given a location (assumed to be a URL), attempt to determine
@@ -402,6 +421,7 @@ def check_location_metadata(val, key=''):
                                           % dict(key=key, type=type(val)))
 
 
+#将image加入到store
 def store_add_to_backend(image_id, data, size, store, context=None,
                          verifier=None):
     """
@@ -419,6 +439,7 @@ def store_add_to_backend(image_id, data, size, store, context=None,
              the checksum of the data
              the storage systems metadata dictionary for the location
     """
+    #直接通过add写入
     (location, size, checksum, metadata) = store.add(image_id,
                                                      data,
                                                      size,
@@ -444,15 +465,17 @@ def store_add_to_backend(image_id, data, size, store, context=None,
     return (location, size, checksum, metadata)
 
 
+#将image添加到backend(scheme方式）
 def add_to_backend(conf, image_id, data, size, scheme=None, context=None,
                    verifier=None):
+    #如果scheme为None,则取default_store
     if scheme is None:
         scheme = conf['glance_store']['default_store']
     store = get_store_from_scheme(scheme)
     return store_add_to_backend(image_id, data, size, store, context,
                                 verifier)
 
-
+#调用store的set_acls函数
 def set_acls(location_uri, public=False, read_tenants=[],
              write_tenants=None, context=None):
 

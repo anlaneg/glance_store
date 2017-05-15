@@ -80,6 +80,7 @@ class Store(capabilities.StoreCapability):
         """
         raise NotImplementedError
 
+    #载入各store对应的store_location类
     def get_store_location_class(self):
         """
         Returns the store location class that is used by this store.

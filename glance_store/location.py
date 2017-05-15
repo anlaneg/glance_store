@@ -47,9 +47,10 @@ from glance_store import exceptions
 CONF = cfg.CONF
 LOG = logging.getLogger(__name__)
 
+#载入的store将存放在这里
 SCHEME_TO_CLS_MAP = {}
 
-
+#自url解析并生成location对象
 def get_location_from_uri(uri, conf=CONF):
     """
     Given a URI, return a Location object that has had an appropriate
@@ -69,6 +70,7 @@ def get_location_from_uri(uri, conf=CONF):
         cinder://volume-id
     """
     pieces = urllib.parse.urlparse(uri)
+    #先自url中取出scheme,检查scheme是否在keys中，如果不在，直接报错
     if pieces.scheme not in SCHEME_TO_CLS_MAP.keys():
         raise exceptions.UnknownScheme(scheme=pieces.scheme)
     scheme_info = SCHEME_TO_CLS_MAP[pieces.scheme]
@@ -114,6 +116,7 @@ class Location(object):
         self.image_id = image_id
         self.store_specs = store_specs or {}
         self.conf = conf
+        #载入location
         self.store_location = store_location_class(self.store_specs, conf)
         if uri:
             self.store_location.parse_uri(uri)

@@ -668,9 +668,11 @@ class Store(glance_store.driver.Store):
               is the supplied image ID.
         """
 
+        #拼接出存放路径
         datadir = self._find_best_datadir(image_size)
         filepath = os.path.join(datadir, str(image_id))
 
+        #文件已存在，报错
         if os.path.exists(filepath):
             raise exceptions.Duplicate(image=filepath)
 
@@ -681,9 +683,11 @@ class Store(glance_store.driver.Store):
                 for buf in utils.chunkreadable(image_file,
                                                self.WRITE_CHUNKSIZE):
                     bytes_written += len(buf)
+                    #计算checksum
                     checksum.update(buf)
                     if verifier:
                         verifier.update(buf)
+                    #写入文件
                     f.write(buf)
         except IOError as e:
             if e.errno != errno.EACCES:
@@ -709,11 +713,13 @@ class Store(glance_store.driver.Store):
             perm = int(str(self.conf.glance_store.filesystem_store_file_perm),
                        8)
             try:
+                #修改权限位
                 os.chmod(filepath, perm)
             except (IOError, OSError):
                 LOG.warning(_LW("Unable to set permission to image: %s") %
                             filepath)
 
+        #返回数据写结果
         return ('file://%s' % filepath, bytes_written, checksum_hex, metadata)
 
     @staticmethod
