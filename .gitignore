@@ -8,6 +8,7 @@ TAGS
 build
 .coverage
 .tox
+.stestr
 cover
 venv
 .venv
@@ -24,6 +25,7 @@ ChangeLog
 AUTHORS
 subunit.log
 covhtml/
+doc/source/reference/api
 
 # Files created by releasenotes build
 releasenotes/build

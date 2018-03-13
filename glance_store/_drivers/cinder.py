@@ -18,6 +18,7 @@ import hashlib
 import logging
 import math
 import os
+import shlex
 import socket
 import time
 
@@ -38,10 +39,12 @@ try:
     from cinderclient import exceptions as cinder_exception
     from cinderclient.v2 import client as cinderclient
     from os_brick.initiator import connector
+    from oslo_privsep import priv_context
 except ImportError:
     cinder_exception = None
     cinderclient = None
     connector = None
+    priv_context = None
 
 
 CONF = cfg.CONF
@@ -473,6 +476,7 @@ class Store(glance_store.driver.Store):
         attach_mode = 'rw' if mode == 'wb' else 'ro'
         device = None
         root_helper = get_root_helper()
+        priv_context.init(root_helper=shlex.split(root_helper))
         host = socket.gethostname()
         properties = connector.get_connector_properties(root_helper, host,
                                                         False, False)
@@ -493,10 +497,13 @@ class Store(glance_store.driver.Store):
             device = conn.connect_volume(connection_info['data'])
             volume.attach(None, None, attach_mode, host_name=host)
             volume = self._wait_volume_status(volume, 'attaching', 'in-use')
-            LOG.debug('Opening host device "%s"', device['path'])
-            with temporary_chown(device['path']), \
-                    open(device['path'], mode) as f:
-                yield f
+            if (connection_info['driver_volume_type'] == 'rbd' and
+               not conn.do_local_attach):
+                yield device['path']
+            else:
+                with temporary_chown(device['path']), \
+                        open(device['path'], mode) as f:
+                    yield f
         except Exception:
             LOG.exception(_LE('Exception while accessing to cinder volume '
                               '%(volume_id)s.'), {'volume_id': volume.id})
@@ -586,7 +593,7 @@ class Store(glance_store.driver.Store):
             LOG.error(reason)
             raise exceptions.NotFound(reason)
         except cinder_exception.ClientException as e:
-            msg = (_('Failed to get image volume %(volume_id): %(error)s')
+            msg = (_('Failed to get image volume %(volume_id)s: %(error)s')
                    % {'volume_id': loc.volume_id, 'error': e})
             LOG.error(msg)
             raise exceptions.BackendException(msg)
@@ -599,7 +606,7 @@ class Store(glance_store.driver.Store):
         :param location: `glance_store.location.Location` object, supplied
                         from glance_store.location.get_location_from_uri()
         :raises: `glance_store.exceptions.NotFound` if image does not exist
-        :rtype int
+        :rtype: int
         """
 
         loc = location.store_location

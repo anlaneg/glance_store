@@ -37,7 +37,7 @@ from glance_store.tests.unit import test_store_capabilities
 
 class FakeObject(object):
     def __init__(self, **kwargs):
-        for name, value in six.iteritems(kwargs):
+        for name, value in kwargs.items():
             setattr(self, name, value)
 
 
@@ -158,12 +158,14 @@ class TestCinderStore(base.StoreBaseTest,
                              kwargs['conn'])
             return fake_connector
 
+        root_helper = "sudo glance-rootwrap /etc/glance/rootwrap.conf"
         with mock.patch.object(cinder.Store,
                                '_wait_volume_status',
                                return_value=fake_volume), \
                 mock.patch.object(cinder, 'temporary_chown',
                                   side_effect=fake_chown), \
-                mock.patch.object(cinder, 'get_root_helper'), \
+                mock.patch.object(cinder, 'get_root_helper',
+                                  return_value=root_helper), \
                 mock.patch.object(connector, 'get_connector_properties'), \
                 mock.patch.object(connector.InitiatorConnector, 'factory',
                                   side_effect=fake_factory):
